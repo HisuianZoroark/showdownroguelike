@@ -4434,7 +4434,31 @@ export const Formats: import('../sim/dex-formats').FormatList = [
 						this.add('-heal', source, source.getHealth, '[silent]');
 						this.add('message', `${source.name} leveled up!`);
 						const nextLevel = source.level + 1;
-						source.m.expAtNextLevel = source.getMinExpForMonAtLevel(this.toID(source.species.name), nextLevel);
+						source.m.expAtNextLevel = this.getMinExpForMonAtLevel(this.toID(source.species.name), nextLevel);
+						const newMoves = this.getMovesAtTarget(this.toID(source.species.name), 'L', nextLevel);
+						if (newMoves.length) {
+							for (const move of newMoves) {
+								const dexMove = this.dex.moves.get(move);
+								if (source.moves.length < 4) {
+									const sketchedMove = {
+										move: dexMove.name,
+										id: dexMove.id,
+										pp: dexMove.pp * (8 / 5),
+										maxpp: dexMove.pp * (8 / 5),
+										target: dexMove.target,
+										disabled: false,
+										used: false,
+									};
+									source.moveSlots.push(sketchedMove);
+									source.baseMoveSlots.push(sketchedMove);
+									this.add('message', `${source.name} learned ${dexMove.name}!`);
+								} else {
+									this.add('message', `${source.name} wants to learn ${dexMove.name}, but it already has 4 moves. Do you want to forget a move to learn ${dexMove.name}?`);
+								}
+
+							}
+						}
+
 					}
 				}
 			}
