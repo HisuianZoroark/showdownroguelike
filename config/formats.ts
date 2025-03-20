@@ -4439,16 +4439,17 @@ export const Formats: import('../sim/dex-formats').FormatList = [
 						if (newMoves.length) {
 							for (const move of newMoves) {
 								const dexMove = this.dex.moves.get(move);
+								if (source.moves.includes(move)) continue;
+								const sketchedMove = {
+									move: dexMove.name,
+									id: dexMove.id,
+									pp: dexMove.pp * (8 / 5),
+									maxpp: dexMove.pp * (8 / 5),
+									target: dexMove.target,
+									disabled: false,
+									used: false,
+								};
 								if (source.moves.length < 4) {
-									const sketchedMove = {
-										move: dexMove.name,
-										id: dexMove.id,
-										pp: dexMove.pp * (8 / 5),
-										maxpp: dexMove.pp * (8 / 5),
-										target: dexMove.target,
-										disabled: false,
-										used: false,
-									};
 									source.moveSlots.push(sketchedMove);
 									source.baseMoveSlots.push(sketchedMove);
 									this.add('message', `${source.name} learned ${dexMove.name}!`);
