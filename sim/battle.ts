@@ -1398,6 +1398,21 @@ export class Battle {
 			}
 			break;
 
+		case 'levelup':
+			for (let i = 0; i < this.sides.length; i++) {
+				const side = this.sides[i];
+				if (side.isAI) {
+					requests[i] = { wait: true, side: side.getRequestData() };
+				} else {
+					const activeData = side.active.map(pokemon => pokemon?.getMoveRequestData());
+					requests[i] = { active: activeData, side: side.getRequestData() };
+					if (side.allySide) {
+						(requests[i] as MoveRequest).ally = side.allySide.getRequestData(true);
+					}
+				}
+			}
+			break;
+
 		default:
 			for (let i = 0; i < this.sides.length; i++) {
 				const side = this.sides[i];
@@ -2476,7 +2491,7 @@ export class Battle {
 	}
 
 	faintMessages(lastFirst = false, forceCheck = false, checkWin = true) {
-		if (this.ended) return;
+		if (this.ended || this.requestState === 'levelup') return;
 		const length = this.faintQueue.length;
 		if (!length) {
 			if (forceCheck && this.checkWin()) return true;
@@ -2951,7 +2966,7 @@ export class Battle {
 			return false;
 		}
 
-		if (!side.isChoiceDone()) {
+		if (!side.isChoiceDone() && this.requestState !== 'levelup') {
 			side.emitChoiceError(`Incomplete choice: ${input} - missing other pokemon`);
 			return false;
 		}

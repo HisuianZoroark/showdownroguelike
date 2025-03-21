@@ -4455,6 +4455,9 @@ export const Formats: import('../sim/dex-formats').FormatList = [
 									this.add('message', `${source.name} learned ${dexMove.name}!`);
 								} else {
 									this.add('message', `${source.name} wants to learn ${dexMove.name}, but it already has 4 moves. Do you want to forget a move to learn ${dexMove.name}?`);
+									source.m.maybeNewMove = true;
+									source.m.newLevelUpMove = move;
+									this.makeRequest('levelup');
 								}
 
 							}

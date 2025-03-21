@@ -1067,6 +1067,22 @@ export class Pokemon {
 			moves,
 		};
 
+		if (this.m.maybeNewMove) {
+			data.moves = [{
+				move: 'Yes',
+				id: 'yes' as ID,
+				target: 'self',
+				disabled: false,
+			},{
+				move: 'No',
+				id: 'no' as ID,
+				target: 'self',
+				disabled: false,
+			}];
+			data.trapped = true;
+			return data;
+		}
+
 		if (isLastActive) {
 			if (this.maybeDisabled) {
 				data.maybeDisabled = this.maybeDisabled;
@@ -1075,7 +1091,7 @@ export class Pokemon {
 				data.maybeLocked = this.maybeLocked;
 			}
 			if (canSwitchIn) {
-				if (this.trapped === true) {
+				if (this.trapped === true || this.m.newLevelUpMove) {
 					data.trapped = true;
 				} else if (this.maybeTrapped) {
 					data.maybeTrapped = true;
@@ -1096,7 +1112,7 @@ export class Pokemon {
 
 			if (this.getDynamaxRequest()) data.canDynamax = true;
 			if (data.canDynamax || this.volatiles['dynamax']) data.maxMoves = this.getDynamaxRequest(true);
-			if (this.canTerastallize) data.canTerastallize = this.canTerastallize;
+			if (this.canTerastallize && !this.m.newLevelUpMove) data.canTerastallize = this.canTerastallize;
 		}
 
 		return data;

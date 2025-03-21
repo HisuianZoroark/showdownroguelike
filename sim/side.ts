@@ -670,6 +670,28 @@ export class Side {
 			return this.emitChoiceError(`${pokemon.name} is not locked`, { pokemon, update: req => {
 				delete req.maybeLocked;
 			} });
+		} else if (moveid === 'yes' || moveid === 'no') {
+			if (moveid === 'yes') {
+				delete pokemon.m.maybeNewMove;
+				this.choice.actions.push({
+					choice: 'move',
+					pokemon,
+					targetLoc: pokemon.getLocOf(pokemon),
+					moveid: moveid,
+				});
+				this.battle.makeRequest('levelup');
+				return true;
+			} else {
+				delete pokemon.m.maybeNewMove;
+				delete pokemon.m.newLevelUpMove;
+				this.choice.actions.push({
+					choice: 'move',
+					pokemon,
+					targetLoc: pokemon.getLocOf(pokemon),
+					moveid: moveid,
+				});
+				return true;
+			}
 		} else if (!moves.length && !zMove) {
 			// Override action and use Struggle if there are no enabled moves with PP
 			// Gen 4 and earlier announce a Pokemon has no moves left before the turn begins, and only to that player's side.
