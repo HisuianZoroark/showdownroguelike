@@ -48,7 +48,9 @@ function getMinExpForMonAtLevel(species: string, level: number) {
 	}
 }
 
-type ItemType = 'pokemon' | 'healHP' | 'healPP' | 'TM' | 'key' | 'scout' | 'debug' | 'revive' | 'cureStatus' | 'item';
+type ItemType = 'pokemon' | 'healHP' | 'healPP' | 'TM' | 'key' | 'debug' | 'revive' | 'cureStatus' | 'item';
+
+type opponentScout = 'revealMon' | 'revealSet' | false;
 
 const SEQUENCE_CHECK: { [k: string]: string[] } = {
 	battle: ['results'],
@@ -198,7 +200,7 @@ function genPokemon(quantity: number, level: number | number[], starter?: boolea
 	const validate = new TeamValidator('gen9roguelikebattle');
 	const gennedMons: PokemonSet[] = [];
 
-	let all = Dex.species.all().filter(s => !s.battleOnly && !s.requiredItems && s.forme !== 'Gmax' && s.forme !== 'Eternamax' && s.forme !== 'Totem' && s.forme !== 'Dusk' && s.forme !== 'Bond' && !(s.isNonstandard && s.isNonstandard !== 'Past'));
+	let all = Dex.species.all().filter(s => !s.battleOnly && !s.requiredItems && s.forme !== 'Gmax' && s.forme !== 'Eternamax' && !s.forme.includes('Totem')  && s.forme !== 'Dusk' && s.forme !== 'Bond' && !(s.isNonstandard && s.isNonstandard !== 'Past'));
 	if (starter) {
 		all = all.filter(s => !s.prevo);
 
@@ -217,7 +219,7 @@ function genPokemon(quantity: number, level: number | number[], starter?: boolea
 		}
 		let setAbil;
 		// TODO: Assess the Pupitar problem
-		if (specie.abilities.S && Math.floor(Math.random() * 100) === 1) {
+		if (specie.abilities.S && Math.floor(Math.random() * 50) === 1) {
 			setAbil = specie.abilities.S;
 		} else if (specie.abilities.H && Math.floor(Math.random() * 20) === 1) {
 			setAbil = specie.abilities.H;
@@ -230,6 +232,8 @@ function genPokemon(quantity: number, level: number | number[], starter?: boolea
 		}
 		const natures: string[] = [];
 		Dex.natures.all().forEach(n => natures.push(n.name));
+		const types: string[] = [];
+		Dex.types.all().forEach(n => types.push(n.name));
 
 		const set: PokemonSet = {
 			name: specie.baseSpecies,
@@ -241,6 +245,7 @@ function genPokemon(quantity: number, level: number | number[], starter?: boolea
 			moves: [],
 			nature: Utils.randomElement(natures),
 			evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
+			teraType: (Math.floor(Math.random() * 20) === 0) ? Utils.randomElement(types) : Utils.randomElement(specie.types),
 
 			ivs: { hp: Math.floor(Math.random() * 32), atk: Math.floor(Math.random() * 32), def: Math.floor(Math.random() * 32), spa: Math.floor(Math.random() * 32), spd: Math.floor(Math.random() * 32), spe: Math.floor(Math.random() * 32) },
 			level: minLevel,
@@ -315,6 +320,7 @@ export class Roguelike {
 	teamData: UserTeamData[];
 	flags: {
 		pokemonOptions?: PokemonSet[],
+		opponentTeamScout?: opponentScout[];
 		[k: string]: any,
 	};
 	opponentTeam: PokemonSet[];
@@ -379,6 +385,11 @@ export class Roguelike {
 		scale.forEach((e, i) => scale[i] = Utils.clampIntRange(e + (this.streak * 5), 1, 100));
 		const num = RECOMMENDED_TEAM_LENGTH[Utils.clampIntRange(this.streak, 0, 6)];
 		this.opponentTeam = genPokemon(num, scale);
+		this.flags.opponentTeamScout = [];
+		this.opponentTeam.sort((a, b) => a.level - b.level);
+		for (let x = 0; x < this.opponentTeam.length; x++) {
+			this.flags.opponentTeamScout.push(false);
+		}
 	}
 
 	lose() {
@@ -458,7 +469,8 @@ export class Roguelike {
 		for (const mon of this.team) {
 			const monData = this.teamData[linkedIndex];
 			const dexSpecies = Dex.species.get(mon.species);
-			buf += `<tr><td><img src="https://play.pokemonshowdown.com/sprites/gen5/${dexSpecies.spriteid}.png" /><br />${mon.species} ${mon.gender !== 'N' ? '(' + mon.gender + ')' : ''}<br />HP: ${monData.curHP}/${monData.maxHP}<br />Status: ${monData.status ? monData.status.toUpperCase() : 'Healthy'}<br />Level: ${mon.level ? mon.level : 100}<br />Item: ${mon.item === '' ? 'None' : mon.item}`;
+			let path = mon.shiny ? `gen5-shiny` : `gen5`;
+			buf += `<tr><td><img src="https://play.pokemonshowdown.com/sprites/${path}/${dexSpecies.spriteid}.png" /><br />${mon.species} ${mon.gender !== 'N' ? '(' + mon.gender + ')' : ''}<br />HP: ${monData.curHP}/${monData.maxHP}<br />Status: ${monData.status ? monData.status.toUpperCase() : 'Healthy'}<br />Level: ${mon.level ? mon.level : 100}<br />Item: ${mon.item === '' ? 'None' : mon.item}`;
 			buf += `<br />EXP: ${monData.exp}/${monData.expAtNextLevel}</td>`;
 			// @ts-ignore ?????
 			buf += `<td>`;
@@ -494,6 +506,145 @@ export class Roguelike {
 		return buf;
 	}
 
+	genMiscTeamHTML(data: PokemonSet[], reason?: string) {
+		let cmd;
+		let buttonText;
+		let buf = `<table style="width:100%; border-collapse: collapse;"border="1"><tr><th>Status</th><th>Info</th><th>Moves</th></tr>`;
+		for (const mon of data) {
+			switch (reason) {
+				case 'starter':
+					cmd = `addstarter ${toID(mon.species)}`;
+					buttonText = `Pick starter`;
+					break;
+				default:
+					cmd = `redeem pokemon, ${toID(mon.species)}`;
+					buttonText = `Add Pokemon`;
+					break;
+			}
+			const dexSpecies = Dex.species.get(mon.species);
+			let path = mon.shiny ? `gen5-shiny` : `gen5`;
+			buf += `<tr><td><img src="https://play.pokemonshowdown.com/sprites/${path}/${dexSpecies.spriteid}.png" /><br />${mon.species} ${mon.gender !== 'N' ? '(' + mon.gender + ')' : ''}<br />Level: ${mon.level ? mon.level : 100}<br />Item: ${mon.item === '' ? 'None' : mon.item}`;
+			// @ts-ignore ?????
+			buf += `<td>`;
+			buf += `Ability: ${mon.ability}<br />`;
+			buf += `Tera Type: ${mon.teraType}<br />`;
+			const dexNature = Dex.natures.get(mon.nature);
+			for (const stat of Object.keys(dexSpecies.baseStats)) {
+				const statNumber = dexSpecies.baseStats[stat as StatID];
+				let calcStat;
+				if (stat === 'hp') {
+					calcStat = Math.floor((((mon.ivs[stat] + (2 * statNumber) + Math.floor(mon.evs[stat] / 4) + 100) * mon.level) / 100) + 10);
+				} else {
+					const mult = (stat === dexNature.plus) ? 1.1 : (stat === dexNature.minus) ? 0.9 : 1;
+					calcStat = Math.floor(mult * Math.floor((((mon.ivs[stat as StatID] + (2 * statNumber) + Math.floor(mon.evs[stat as StatID] / 4)) * mon.level) / 100) + 5));
+				}
+				buf += `${stat.toUpperCase()}: ${calcStat} (EVs: ${mon.evs[stat as StatID]} | IVs: ${mon.ivs[stat as StatID]})<br />`;
+			}
+			buf += `${mon.nature} Nature<br />`;
+			buf += `</td>`;
+			buf += `<td>`;
+			let linkedMoveIndex = 0;
+			for (const move of mon.moves) {
+				if (linkedMoveIndex > 0) buf += '<br />';
+				const dexMove = Dex.moves.get(move);
+				buf += `${dexMove.name}`;
+				linkedMoveIndex++;
+			}
+			buf += `<td><button class="button" name="send" value="/roguelike ${cmd}">${buttonText}</button>`;
+			buf += `</td></tr>`;
+		}
+		buf += `</table>`;
+		return buf;
+	}
+
+	genScoutHTML() {
+		let buf = `<table style="width:100%; border-collapse: collapse;"border="1"><tr><th>Status</th><th>Info</th><th>Moves</th></tr>`;
+		let linkedOpponentIndex = 0;
+		for (const mon of this.opponentTeam) {
+			let buttonText;
+			let scoutData = this.flags.opponentTeamScout[linkedOpponentIndex];
+			switch (scoutData) {
+				case 'revealMon':
+					buttonText = 'Reveal Set (3 BP)';
+					break;
+				case 'revealSet':
+					buttonText = 'Already scouted!';
+					break;
+				default:
+					buttonText = 'Reveal Pokemon (2 BP)';
+					break;
+			}
+			buf += `<tr><td>`;
+			const dexSpecies = Dex.species.get(mon.species);
+			if (!scoutData) {
+				buf += `???`;
+			} else {
+				let path = mon.shiny ? `gen5-shiny` : `gen5`;
+				buf += `<img src="https://play.pokemonshowdown.com/sprites/${path}/${dexSpecies.spriteid}.png" /><br />${mon.species} ${mon.gender !== 'N' ? '(' + mon.gender + ')' : ''}<br />Level: ${mon.level ? mon.level : 100}`;
+				if (scoutData === 'revealSet') buf += `<br />Item: ${mon.item === '' ? 'None' : mon.item}`;
+			}
+			// @ts-ignore ?????
+			buf += `<td>`;
+			if (scoutData === 'revealSet') {
+				buf += `Ability: ${mon.ability}<br />`;
+				buf += `Tera Type: ${mon.teraType}<br />`;
+				const dexNature = Dex.natures.get(mon.nature);
+				for (const stat of Object.keys(dexSpecies.baseStats)) {
+					const statNumber = dexSpecies.baseStats[stat as StatID];
+					let calcStat;
+					if (stat === 'hp') {
+						calcStat = Math.floor((((mon.ivs[stat] + (2 * statNumber) + Math.floor(mon.evs[stat] / 4) + 100) * mon.level) / 100) + 10);
+					} else {
+						const mult = (stat === dexNature.plus) ? 1.1 : (stat === dexNature.minus) ? 0.9 : 1;
+						calcStat = Math.floor(mult * Math.floor((((mon.ivs[stat as StatID] + (2 * statNumber) + Math.floor(mon.evs[stat as StatID] / 4)) * mon.level) / 100) + 5));
+					}
+					buf += `${stat.toUpperCase()}: ${calcStat} (EVs: ${mon.evs[stat as StatID]} | IVs: ${mon.ivs[stat as StatID]})<br />`;
+				}
+				buf += `${mon.nature} Nature<br />`;
+			} else {
+				buf += `???`;
+			}
+			buf += `</td>`;
+			buf += `<td>`;
+			if (scoutData === 'revealSet') {
+				let linkedMoveIndex = 0;
+				for (const move of mon.moves) {
+					if (linkedMoveIndex > 0) buf += '<br />';
+					const dexMove = Dex.moves.get(move);
+					buf += `${dexMove.name}`;
+					linkedMoveIndex++;
+				}
+			} else {
+				buf += `???`;
+			}
+			switch (scoutData) {
+				case 'revealMon':
+					if (3 > this.battlePoints) {
+						buf += `<td><button class="button disabled">Not enough BP!</button>`;
+					} else {
+						buf += `<td><button class="button" name="send" value="/roguelike scoutslot ${linkedOpponentIndex + 1}">${buttonText}</button>`;
+					}
+					break;
+				case 'revealSet':
+				buf += `<td><button class="button disabled">Already scouted!</button>`;
+					break;
+				default:
+					buttonText = 'Reveal Pokemon (2 BP)';
+					if (2 > this.battlePoints) {
+						buf += `<td><button class="button disabled">Not enough BP!</button>`;
+					} else {
+						buf += `<td><button class="button" name="send" value="/roguelike scoutslot ${linkedOpponentIndex + 1}">${buttonText}</button>`;
+					}
+					break;
+			}
+
+			buf += `</td></tr>`;
+			linkedOpponentIndex++;
+		}
+		buf += `</table>`;
+		return buf;
+	}
+
 	genQuickSelectHTML(checkItem: ItemType | "switch", targetIndex?: number) {
 		let buf = `<div style="width:100%;"><center>`;
 		let cmd;
@@ -516,18 +667,22 @@ export class Roguelike {
 			case 'healHP':
 				failureCondition = this.teamData[index - 1].curHP >= this.teamData[index - 1].maxHP || this.teamData[index - 1].status === 'fnt';
 				cmd = 'redeem healhp, ' + index;
+				skipmsg = 'Undo';
 				break;
 			case 'healPP':
 				failureCondition = this.teamData[index - 1].ppLeft.every((v, i) => Dex.moves.get(this.team[index - 1].moves[i]).pp * (8 / 5) === v);
 				cmd = 'redeem healpp, ' + index;
+				skipmsg = 'Undo';
 				break;
 			case 'cureStatus':
 				failureCondition = !(this.teamData[index - 1].status && this.teamData[index - 1].status !== 'fnt');
 				cmd = 'redeem curestatus, ' + index;
+				skipmsg = 'Undo';
 				break;
 			case 'revive':
 				failureCondition = this.teamData[index - 1].status !== 'fnt';
 				cmd = 'redeem revive, ' + index;
+				skipmsg = 'Undo';
 				break;
 			case 'switch':
 				failureCondition = index === targetIndex;
@@ -536,7 +691,6 @@ export class Roguelike {
 				skipmsg = 'Undo';
 			case 'TM':
 			case 'key':
-			case 'scout':
 			case 'debug':
 			}
 			if (failureCondition) {
@@ -577,13 +731,9 @@ export class Roguelike {
 		switch ((this.flags.purchasedItem as ShopItem)?.type) {
 		case 'pokemon':
 			exitButtonText = 'Skip';
-			buf += `<center><h3>Add a Pokemon!</h3><br />`;
-			buf += `<div style="width:100%;">`;
+			buf += `<center><h3>Add a Pokemon!</h3></center><br />`;
 			// @ts-ignore
-			for (const poke of this.flags.pokemonOptions) {
-				buf += `<button class="button" name="send" value="/roguelike redeem pokemon, ${toID(poke.species)}"><img src="https://play.pokemonshowdown.com/sprites/gen5/${Dex.species.get(poke.species).spriteid}.png" /></button>`;
-			}
-			buf += `</div>`;
+			buf += this.genMiscTeamHTML(this.flags.pokemonOptions);
 			break;
 		case 'healHP':
 		case 'healPP':
@@ -595,8 +745,6 @@ export class Roguelike {
 		case 'TM':
 			break;
 		case 'key':
-			break;
-		case 'scout':
 			break;
 		case 'item':
 			exitButtonText = 'Skip';
@@ -618,7 +766,7 @@ export class Roguelike {
 			buf += 'Something went wrong, contact HiZo.';
 			break;
 		}
-		buf += `<br /><button class="button" name="send" value="/roguelike shop">${exitButtonText}</button>`;
+		buf += `<br /><center><button class="button" name="send" value="/roguelike shop">${exitButtonText}</button></center>`;
 		return buf;
 	}
 }
@@ -720,6 +868,36 @@ export const commands: Chat.ChatCommands = {
 			if (!checkSequence(userData.curRoom, 'shop')) return this.errorReply(`Can't go here yet!`);
 			userData.goToPage('shop-team');
 		},
+		scout(target, room, user) {
+			const userData = roguelikeGames.get(user.id);
+			if (!userData || userData.runEnded) return this.errorReply(`You need to make a new run first.`);
+			if (!checkSequence(userData.curRoom, 'shop')) return this.errorReply(`Can't go here yet!`);
+			userData.goToPage('shop-scout');
+		},
+		scoutslot(target, room, user) {
+			const userData = roguelikeGames.get(user.id);
+			if (!userData || userData.runEnded) return this.errorReply(`You need to make a new run first.`);
+			if (userData.curRoom !== 'shop-scout') return this.errorReply(`Can't scout yet!`);
+			let index = parseInt(target);
+			index--;
+			if (userData.flags.opponentTeamScout[index] === undefined) return this.errorReply(`Slot doesn't exist!`);
+			switch(userData.flags.opponentTeamScout[index]) {
+				case 'revealMon':
+				if (3 > userData.battlePoints) return this.popupReply(`You don't have enough BP to buy this!`);
+					userData.flags.opponentTeamScout[index] = 'revealSet';
+					userData.battlePoints -= 3;
+					break;
+				case 'revealSet':
+					return this.errorReply(`You already scouted!`);
+					break;
+				default:
+				if (2 > userData.battlePoints) return this.popupReply(`You don't have enough BP to buy this!`);
+					userData.flags.opponentTeamScout[index] = 'revealMon';
+					userData.battlePoints -= 2;
+					break;
+			}
+			userData.goToPage('shop-scout');
+		},
 		buy(target, room, user) {
 			const userData = roguelikeGames.get(user.id);
 			if (!userData || userData.runEnded) return this.errorReply(`You need to make a new run first.`);
@@ -732,6 +910,11 @@ export const commands: Chat.ChatCommands = {
 				const scale = [5, 10];
 				scale.forEach((e, i) => scale[i] = Utils.clampIntRange(e + (userData.streak * 5), 1, 100));
 				userData.flags.pokemonOptions = genPokemon(3, scale);
+				userData.battlePoints -= item.cost;
+				break;
+			case 'item':
+				userData.flags.itemOptions = genItem(3, userData.team);
+				userData.battlePoints -= item.cost;
 				break;
 			case 'healHP':
 			case 'healPP':
@@ -739,14 +922,9 @@ export const commands: Chat.ChatCommands = {
 			case 'cureStatus':
 			case 'TM':
 			case 'key':
-			case 'scout':
 			case 'debug':
-			case 'item':
-				userData.flags.itemOptions = genItem(3, userData.team);
-				break;
 			}
 			userData.flags.purchasedItem = item;
-			userData.battlePoints -= item.cost;
 			userData.goToPage('purchase');
 		},
 		addstarter(target, room, user) {
@@ -800,6 +978,7 @@ export const commands: Chat.ChatCommands = {
 				if (!userData.team[index]) return this.errorReply(`You need to specify a pokemon on your team.`);
 				if (userData.teamData[index].curHP === userData.teamData[index].maxHP) return this.errorReply(`You can't use this on that pokemon.`);
 				userData.teamData[index].curHP = userData.teamData[index].maxHP;
+				userData.battlePoints -= (userData.flags.purchasedItem as ShopItem).cost;
 				// TODO: More items
 				break;
 			case 'healpp':
@@ -810,6 +989,7 @@ export const commands: Chat.ChatCommands = {
 				if (!userData.team[index]) return this.errorReply(`You need to specify a pokemon on your team.`);
 				if (userData.teamData[index].ppLeft.every((v, i) => Dex.moves.get(userData.team[index].moves[i]).pp * (8 / 5) === v)) return this.errorReply(`You can't use this on that pokemon.`);
 				userData.teamData[index].ppLeft.forEach((v, i) => userData.teamData[index].ppLeft[i] = Dex.moves.get(userData.team[index].moves[i]).pp * (8 / 5));
+				userData.battlePoints -= (userData.flags.purchasedItem as ShopItem).cost;
 				// TODO: More items
 				break;
 			case 'curestatus':
@@ -820,6 +1000,7 @@ export const commands: Chat.ChatCommands = {
 				if (!userData.team[index]) return this.errorReply(`You need to specify a pokemon on your team.`);
 				if (!userData.teamData[index].status || userData.teamData[index].status === 'fnt') return this.errorReply(`You can't use this on that pokemon.`);
 				userData.teamData[index].status = false;
+				userData.battlePoints -= (userData.flags.purchasedItem as ShopItem).cost;
 				// TODO: More items
 				break;
 			case 'revive':
@@ -831,6 +1012,7 @@ export const commands: Chat.ChatCommands = {
 				if (userData.teamData[index].status !== 'fnt') return this.errorReply(`You can't use this on that pokemon.`);
 				userData.teamData[index].curHP = Math.floor(userData.teamData[index].maxHP / 2);
 				userData.teamData[index].status = false;
+				userData.battlePoints -= (userData.flags.purchasedItem as ShopItem).cost;
 				// TODO: More items
 				break;
 			case 'item':
@@ -934,7 +1116,7 @@ export const pages: Chat.PageTable = {
 		if (!userGameData) {
 			let buf = `<div class = "pad"><center>`;
 			buf += `Hello, I am <username>HiZo</username>, and welcome to my Roguelike. It is based on a combination of Balatro and the Gen 4 Battle Castle. You just gotta keep winning fights, get new Pokemon, and try for a high score!<br /><br />`;
-			buf += `However, keep in mind this game is in <strong>Alpha</strong> (and in the bare minimum release, too), which means that: there may be bugs, there are features that may not be present compared to a real Pokemon (fan)game, and there could be updates which might break your save file and I may need to remove your current run in the event that happens.<br /><br />`;
+			buf += `However, keep in mind this game is in <strong>Alpha</strong>, which means that: there may be bugs, there are features that may not be present compared to a real Pokemon (fan)game, and there could be updates which might break your save file and I may need to remove your current run in the event that happens.<br /><br />`;
 			buf += `If there are bugs you encounter, please let me know. Best ways to contact me are on Smogon (HiZo), Pokemon Showdown (HiZo or Misao) or Discord (hisuianzoroark).<br /><br />`;
 			buf += `Special thanks to <username>HoeenHero</username> for tech support and <username>Swagn</username>, <username>Smudge</username>, <username>April</username>, <username>Lumii</username>, <username>Clas</username>, and a LOT of other people who made me motivated to keep working on this.<br /><br />`;
 			buf += `Now without further ado...<br /><br />`;
@@ -984,14 +1166,19 @@ export const pages: Chat.PageTable = {
 				}
 			}
 			break;
-		case 'scout':
 		case 'shop':
-			buf += `<b>Current match:</b> ${(userGameData.battle % 7 === 0 ? 7 : userGameData.battle % 7)}/7 | <b>Streaks won:</b> ${userGameData.streak}/7 | <b>BP:</b> ${userGameData.battlePoints}<br /><br />`;
+			buf += `<b>Current match:</b> ${(userGameData.battle % 7 === 0 ? 7 : userGameData.battle % 7)}/7 | <b>Current Streak:</b> ${userGameData.streak + 1}/8 | <b>BP:</b> ${userGameData.battlePoints}<br /><br />`;
 			switch (gameArgs.shift()) {
 			case 'team':
 				subtitle = 'Current Team';
 				buf += `<button class="button" name="send" value="/roguelike shop">Go back to shop</button>`;
 				buf += userGameData.genUserTeamHTML();
+				break;
+			case 'scout':
+				subtitle = 'Scouting Opponent';
+				buf += `<button class="button" name="send" value="/roguelike shop">Go back to shop</button><br />`;
+				buf += `<center><h3>Opponent's team</h3><br />`;
+				buf += userGameData.genScoutHTML();
 				break;
 			case 'switch':
 				subtitle = 'Current Team';
@@ -1004,6 +1191,7 @@ export const pages: Chat.PageTable = {
 			default:
 				subtitle = 'Shop';
 				buf += `<button class="button" name="send" value="/roguelike checkteam">Check your team</button>`;
+				buf += `<button class="button" style="float: right;" name="send" value="/roguelike scout">Scout your next opponent</button>`;
 				buf += userGameData.genShopHTML();
 				buf += `<br /><button class="button" name="send" value="/roguelike next">Start the next battle!</button>`;
 			}
@@ -1034,11 +1222,8 @@ export const pages: Chat.PageTable = {
 				return this.errorReply('If you reached this error, you either already picked a starter or should contact HiZo.');
 			}
 			buf += `<center><h3>Choose a starter!</h3><br />`;
-			buf += `<div style="width:100%;">`;
-			for (const poke of userGameData.flags.pokemonOptions) {
-				buf += `<button class="button" name="send" value="/roguelike addstarter ${toID(poke.species)}"><img src="https://play.pokemonshowdown.com/sprites/gen5/${Dex.species.get(poke.species).spriteid}.png" /></button>`;
-			}
-			buf += `</div>`;
+			// @ts-ignore
+			buf += userGameData.genMiscTeamHTML(userGameData.flags.pokemonOptions, 'starter');
 			break;
 		case 'other':
 			// TODO: ????
@@ -1073,7 +1258,15 @@ export const handlers: Chat.Handlers = {
 		humanGameData.inBattle = false;
 		if (human === winner) {
 			if (battle.currentData) humanGameData.syncAfterMatch(battle.currentData);
-			humanGameData.win();
+			if (humanGameData.teamData.every(poke => poke.status === 'fnt')) {
+				if (humanGameData.battle % 7 === 0) {
+					humanGameData.streak++;
+				}
+				humanGameData.battle++;
+				humanGameData.lose();
+			} else {
+				humanGameData.win();
+			}
 		} else {
 			humanGameData.lose();
 		}

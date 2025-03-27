@@ -4424,10 +4424,12 @@ export const Formats: import('../sim/dex-formats').FormatList = [
 						source.level++;
 						source.set.level++;
 						if (source.baseSpecies.name !== 'Shedinja') {
+							let percent = source.hp / source.baseMaxhp;
 							source.baseMaxhp = Math.floor(Math.floor(
 								2 * source.species.baseStats['hp'] + source.set.ivs['hp'] + Math.floor(source.set.evs['hp'] / 4) + 100
 							) * source.level / 100 + 10);
 							source.maxhp = source.baseMaxhp;
+							source.hp = Math.floor(source.baseMaxhp * percent);
 						}
 						source.details = source.getUpdatedDetails();
 						this.add('detailschange', source, source.details);
@@ -4487,7 +4489,7 @@ export const Formats: import('../sim/dex-formats').FormatList = [
 								pokemon.m.willFaint = true;
 							} else {
 								// @ts-ignore
-								pokemon.setStatus(persist.status as ID);
+								pokemon.setStatus(persist.status as ID, null, null, true);
 							}
 						}
 						let moveIndex = 0;
