@@ -149,6 +149,7 @@ export class Battle {
 	readonly messageLog: string[];
 	sentLogPos: number;
 	sentEnd: boolean;
+	sentRequests = true;
 
 	requestState: RequestState;
 	turn: number;
@@ -608,6 +609,11 @@ export class Battle {
 			// it's changed; call it off
 			return relayVar;
 		}
+		if (eventid === 'SwitchIn' && effect.effectType === 'Ability' && effect.flags['breakable'] &&
+			this.suppressingAbility(target as Pokemon)) {
+			this.debug(eventid + ' handler suppressed by Mold Breaker');
+			return relayVar;
+		}
 		if (eventid !== 'Start' && eventid !== 'TakeItem' && effect.effectType === 'Item' &&
 			(target instanceof Pokemon) && target.ignoringItem()) {
 			this.debug(eventid + ' handler suppressed by Embargo, Klutz or Magic Room');
@@ -1005,6 +1011,10 @@ export class Battle {
 		if (handler.effectHolder && (handler.effectHolder as Pokemon).getStat) {
 			const pokemon = handler.effectHolder as Pokemon;
 			handler.speed = pokemon.speed;
+			if (handler.effect.effectType === 'Ability' && handler.effect.name === 'Magic Bounce' &&
+				callbackName === 'onAllyTryHitSide') {
+				handler.speed = pokemon.getStat('spe', true, true);
+			}
 			if (callbackName.endsWith('SwitchIn')) {
 				// Pokemon speeds including ties are resolved before all onSwitchIn handlers and aren't re-sorted in-between
 				// so we subtract a fractional speed from each Pokemon's respective event handlers by using the index of their
@@ -1339,8 +1349,9 @@ export class Battle {
 
 		const requests = this.getRequests(type);
 		for (let i = 0; i < this.sides.length; i++) {
-			this.sides[i].emitRequest(requests[i]);
+			this.sides[i].activeRequest = requests[i];
 		}
+		this.sentRequests = false;
 
 		if (!this.sides.some(s => s.isAI) && this.sides.every(side => side.isChoiceDone())) {
 			throw new Error(`Choices are done immediately after a request`);
@@ -2500,7 +2511,7 @@ export class Battle {
 				this.runEvent('Faint', pokemon, faintData.source, faintData.effect);
 				if (pokemon.isActive) this.singleEvent('End', pokemon.getAbility(), pokemon.abilityState, pokemon);
 				if (pokemon.isActive) this.singleEvent('End', pokemon.getItem(), pokemon.itemState, pokemon);
-				if (pokemon.regressionForme) {
+				if (pokemon.formeRegression && !pokemon.transformed) {
 					// before clearing volatiles
 					pokemon.baseSpecies = this.dex.species.get(pokemon.set.species || pokemon.set.name);
 					pokemon.baseAbility = toID(pokemon.set.ability);
@@ -2511,10 +2522,11 @@ export class Battle {
 				pokemon.isActive = false;
 				pokemon.isStarted = false;
 				delete pokemon.terastallized;
-				if (pokemon.regressionForme) {
+				if (pokemon.formeRegression) {
 					// after clearing volatiles
 					pokemon.details = pokemon.getUpdatedDetails();
-					pokemon.regressionForme = false;
+					this.add('detailschange', pokemon, pokemon.details, '[silent]');
+					pokemon.formeRegression = false;
 				}
 				pokemon.side.faintedThisTurn = pokemon;
 				if (this.faintQueue.length >= faintQueueLeft) checkWin = true;
@@ -2555,11 +2567,7 @@ export class Battle {
 	}
 
 	checkWin(faintData?: Battle['faintQueue'][0]) {
-		const team1PokemonLeft = this.sides[0].pokemonLeft + (this.sides[0].allySide?.pokemonLeft || 0);
-		const team2PokemonLeft = this.sides[1].pokemonLeft + (this.sides[1].allySide?.pokemonLeft || 0);
-		const team3PokemonLeft = this.gameType === 'freeforall' && this.sides[2]!.pokemonLeft;
-		const team4PokemonLeft = this.gameType === 'freeforall' && this.sides[3]!.pokemonLeft;
-		if (!team1PokemonLeft && !team2PokemonLeft && !team3PokemonLeft && !team4PokemonLeft) {
+		if (this.sides.every(side => !side.pokemonLeft)) {
 			if (this.requestState === 'levelup' && !this.endedMidCutscene) {
 				this.endedMidCutscene = true;
 				return true;
@@ -2649,10 +2657,10 @@ export class Battle {
 				const behemothMove: { [k: string]: string } = {
 					'Zacian-Crowned': 'behemothblade', 'Zamazenta-Crowned': 'behemothbash',
 				};
-				const ironHead = pokemon.baseMoves.indexOf('ironhead');
-				if (ironHead >= 0) {
+				const ironHeadIndex = pokemon.baseMoves.indexOf('ironhead');
+				if (ironHeadIndex >= 0) {
 					const move = this.dex.moves.get(behemothMove[rawSpecies.name]);
-					pokemon.baseMoveSlots[ironHead] = {
+					pokemon.baseMoveSlots[ironHeadIndex] = {
 						move: move.name,
 						id: move.id,
 						pp: move.noPPBoosts ? move.pp : move.pp * 8 / 5,
@@ -3254,9 +3262,9 @@ export class Battle {
 					const crowned: { [k: string]: string } = {
 						'Zacian-Crowned': 'behemothblade', 'Zamazenta-Crowned': 'behemothbash',
 					};
-					const ironHead = set.moves.map(toID).indexOf('ironhead' as ID);
-					if (ironHead >= 0) {
-						newSet.moves[ironHead] = crowned[newSet.species];
+					const ironHeadIndex = set.moves.map(toID).indexOf('ironhead' as ID);
+					if (ironHeadIndex >= 0) {
+						newSet.moves[ironHeadIndex] = crowned[newSet.species];
 					}
 				}
 				return newSet;
@@ -3318,6 +3326,10 @@ export class Battle {
 	sendUpdates() {
 		if (this.sentLogPos >= this.log.length) return;
 		this.send('update', this.log.slice(this.sentLogPos));
+		if (!this.sentRequests) {
+			for (const side of this.sides) side.emitRequest();
+			this.sentRequests = true;
+		}
 		this.sentLogPos = this.log.length;
 
 		if (!this.sentEnd && this.ended) {

@@ -79,6 +79,7 @@ interface Handlers {
 	onDisconnect: (user: User) => void;
 	onRoomDestroy: (roomid: RoomID) => void;
 	onBattleEnd: (battle: RoomBattle, winner: ID, players: ID[]) => void;
+	onBattleCreate: (battle: RoomBattle, players: ID[]) => void;
 	onAbandondedBattleDestroy: (battle: RoomBattle, players: ID[]) => void;
 	onLadderSearch: (user: User, connection: Connection, format: ID) => void;
 	onBattleRanked: (
