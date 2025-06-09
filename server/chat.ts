@@ -80,6 +80,7 @@ interface Handlers {
 	onRoomDestroy: (roomid: RoomID) => void;
 	onBattleEnd: (battle: RoomBattle, winner: ID, players: ID[]) => void;
 	onAbandondedBattleDestroy: (battle: RoomBattle, players: ID[]) => void;
+	onBattleCreate: (battle: RoomBattle, players: ID[]) => void;
 	onLadderSearch: (user: User, connection: Connection, format: ID) => void;
 	onBattleRanked: (
 		battle: Rooms.RoomBattle, winner: ID, ratings: (AnyObject | null | undefined)[], players: ID[]
