@@ -122,6 +122,7 @@ export interface SwitchRequest {
 	forceSwitch: boolean[];
 	side: SideRequestData;
 	noCancel?: boolean;
+	update?: boolean;
 }
 export interface TeamPreviewRequest {
 	wait?: undefined;
@@ -139,6 +140,7 @@ export interface MoveRequest {
 	side: SideRequestData;
 	ally?: SideRequestData;
 	noCancel?: boolean;
+	update?: boolean;
 }
 export interface WaitRequest {
 	wait: true;
@@ -409,7 +411,7 @@ export class Side {
 			delete this.sideConditions[status.id];
 			return false;
 		}
-		this.battle.runEvent('SideConditionStart', source, source, status);
+		this.battle.runEvent('SideConditionStart', this, source, status);
 		return true;
 	}
 
@@ -489,7 +491,8 @@ export class Side {
 		this.battle.send('sideupdate', `${this.id}\n${sideUpdate}`);
 	}
 
-	emitRequest(update: ChoiceRequest = this.activeRequest!) {
+	emitRequest(update: ChoiceRequest = this.activeRequest!, updatedRequest = false) {
+		if (updatedRequest) (this.activeRequest as MoveRequest | SwitchRequest).update = true;
 		this.battle.send('sideupdate', `${this.id}\n|request|${JSON.stringify(update)}`);
 		this.activeRequest = update;
 		if (this.isAI) {
@@ -505,7 +508,7 @@ export class Side {
 		const updated = update ? this.updateRequestForPokemon(update.pokemon, update.update) : null;
 		const type = `[${updated ? 'Unavailable' : 'Invalid'} choice]`;
 		this.battle.send('sideupdate', `${this.id}\n|error|${type} ${message}`);
-		if (updated) this.emitRequest();
+		if (updated) this.emitRequest(this.activeRequest!, true);
 		if (this.battle.strictChoices) throw new Error(`${type} ${message}`);
 		if (this.isAI) {
 			this.battle.choose(this.id, 'default');
