@@ -120,7 +120,7 @@ export const Conditions: import('../sim/dex-conditions').ConditionDataTable = {
 			}
 		},
 		onDamagingHit(damage, target, source, move) {
-			if (move.type === 'Fire' && move.category !== 'Status') {
+			if (move.type === 'Fire' && move.category !== 'Status' && move.id !== 'polarflare') {
 				target.cureStatus();
 			}
 		},
@@ -275,6 +275,11 @@ export const Conditions: import('../sim/dex-conditions').ConditionDataTable = {
 		onRestart() {
 			if (this.effectState.trueDuration >= 2) {
 				this.effectState.duration = 2;
+			}
+		},
+		onAfterMove(pokemon) {
+			if (this.effectState.duration === 1) {
+				pokemon.removeVolatile('lockedmove');
 			}
 		},
 		onEnd(target) {
