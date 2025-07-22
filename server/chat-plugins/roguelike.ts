@@ -656,7 +656,6 @@ export class Roguelike {
 			const dexSpecies = Dex.species.get(mon.species);
 			const path = mon.shiny ? `gen5-shiny` : `gen5`;
 			buf += `<tr><td><img src="https://play.pokemonshowdown.com/sprites/${path}/${dexSpecies.spriteid}.png" /><br />${mon.species} ${mon.gender !== 'N' ? '(' + mon.gender + ')' : ''}<br />Level: ${mon.level ? mon.level : 100}<br />Item: ${mon.item === '' ? 'None' : mon.item}`;
-			// @ts-expect-error ?????
 			buf += `<td>`;
 			buf += `Ability: ${mon.ability}<br />`;
 			buf += `Tera Type: ${mon.teraType}<br />`;
