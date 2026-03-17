@@ -1710,7 +1710,8 @@ export const commands: Chat.ChatCommands = {
 			`- <a href="https://github.com/smogon/pokemon-showdown">Server source code</a><br />` +
 			`- <a href="https://github.com/smogon/pokemon-showdown-client">Client source code</a><br />` +
 			`- <a href="https://github.com/Zarel/Pokemon-Showdown-Dex">Dex source code</a><br />` +
-			`- <a href="https://github.com/smogon/pokemon-showdown-loginserver">Login server source code</a>`
+			`- <a href="https://github.com/smogon/pokemon-showdown-loginserver">Login server source code</a><br />` +
+			`- <a href="https://github.com/HisuianZoroark/showdownroguelike">Source code for this server specifically</a>`
 		);
 	},
 	opensourcehelp: [
@@ -2128,7 +2129,7 @@ export const commands: Chat.ChatCommands = {
 	],
 
 	faq(target, room, user) {
-		target = toID(target);
+		target = toID(this.splitOne(target)[0]);
 		const showAll = target === 'all';
 		if (showAll && this.shouldBroadcast()) {
 			throw new Chat.ErrorMessage(this.tr`You cannot broadcast all FAQs at once.`);
