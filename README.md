@@ -1,3 +1,6 @@
+### As of 6/27/2026 this project has been abandoned and this repository is set to be archived. More information can be seen [here](https://www.smogon.com/forums/threads/hizos-untitled-ps-roguelike.3762946/page-2#post-11043924).
+
+
 Pokémon Showdown
 ========================================================================
 
